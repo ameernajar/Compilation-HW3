@@ -3,6 +3,11 @@
 // Created by amirn on 12/19/2025.
 //
 
+bool isNumericType(ast::BuiltInType type)
+{
+    return type == ast::BuiltInType::INT || type == ast::BuiltInType::BYTE;
+}
+
 void MyVisitor::getFuncs()
 {
 
@@ -85,64 +90,218 @@ void MyVisitor::visit(ast::ID &node)
 void MyVisitor::visit(ast::BinOp &node)
 {
     visit(*(node.left));
+    const ast::BuiltInType leftType = lastType;
+
+    if (!isNumericType(leftType))
+        output::errorMismatch(node.line);
 
     visit(*(node.right));
+    const ast::BuiltInType rightType = lastType;
+
+    if (!isNumericType(rightType))
+        output::errorMismatch(node.line);
+
+    if (leftType == ast::BuiltInType::INT || rightType == ast::BuiltInType::INT)
+        lastType = ast::BuiltInType::INT;
+    else
+        lastType = ast::BuiltInType::BYTE;
 }
 
 void MyVisitor::visit(ast::RelOp &node)
 {
+    visit(*(node.left));
+    const ast::BuiltInType leftType = lastType;
+
+    if (!isNumericType(leftType))
+        output::errorMismatch(node.line);
+
+    visit(*(node.right));
+    const ast::BuiltInType rightType = lastType;
+
+    if (!isNumericType(rightType))
+        output::errorMismatch(node.line);
+
+    lastType = ast::BuiltInType::BOOL;
 }
 
 void MyVisitor::visit(ast::Not &node)
 {
+    visit(*(node.exp));
+    const ast::BuiltInType expType = lastType;
+
+    if (expType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
+
+    lastType = ast::BuiltInType::BOOL;
+}
+
+void booleanOp(ast::Node &node)
+{
+    visit(*(node.left));
+    const ast::BuiltInType leftType = lastType;
+
+    if (leftType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
+
+    visit(*(node.right));
+    const ast::BuiltInType rightType = lastType;
+
+    if (rightType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
 }
 
 void MyVisitor::visit(ast::And &node)
 {
+    booleanOp(node);
+    lastType = ast::BuiltInType::BOOL;
 }
 
 void MyVisitor::visit(ast::Or &node)
 {
+    booleanOp(node);
+    lastType = ast::BuiltInType::BOOL;
 }
 
 void MyVisitor::visit(ast::Type &node)
 {
+    lastType = node.type;
 }
 
 void MyVisitor::visit(ast::Cast &node)
 {
+    visit(*(node.exp));
+    const ast::BuiltInType expType = lastType;
+
+    if (expType == node.target_type->type)
+        return;
+
+    if (expType == ast::BuiltInType::INT && node.target_type->type == ast::BuiltInType::BYTE)
+    {
+        lastType = ast::BuiltInType::BYTE;
+        return;
+    }
+
+    if (expType == ast::BuiltInType::BYTE && node.target_type->type == ast::BuiltInType::INT)
+    {
+        lastType = ast::BuiltInType::INT;
+        return;
+    }
+
+    output::errorMismatch(node.line);
 }
 
 void MyVisitor::visit(ast::ExpList &node)
 {
+    for (const auto &exp : node.exps)
+    {
+        visit(*exp);
+    }
 }
 
 void MyVisitor::visit(ast::Call &node)
 {
+    const auto findResult = currentScope->findType(node.func_id->value);
+    if (!findResult.found)
+    {
+        output::errorUndefFunc(node.line, node.func_id->value);
+    }
+    if (findResult.idType != Scope::IdType::FUNC)
+    {
+        output::errorDefAsVar(node.line, node.func_id->value);
+    }
+    const auto &funcInfo = findResult.funcInfo;
+    vector<ast::BuiltInType> argTypes;
+    if (node.args)
+    {
+        for (const auto &arg : node.args->exps)
+        {
+            visit(*arg);
+            argTypes.push_back(lastType);
+        }
+    }
+
+    // cast param types to string for error message
+    vector<string> paramTypes;
+    for (const auto &type : funcInfo.params)
+        paramTypes.push_back(output::typeToString(type));
+
+    // check parameter count and types
+    if (argTypes.size() != funcInfo.params.size())
+        output::errorPrototypeMismatch(node.line, node.func_id->value, paramTypes);
+    for (size_t i = 0; i < argTypes.size(); ++i)
+    {
+        if (argTypes[i] != funcInfo.params[i])
+            output::errorPrototypeMismatch(node.line, node.func_id->value, paramTypes);
+    }
 }
 
 void MyVisitor::visit(ast::Statements &node)
 {
+    // TODO: check scopes
+    // TODO: STATEMENT NODES DO NOT HAVE VISIT!
+    for (const auto &statement : node.statements)
+    {
+        visit(*statement);
+    }
 }
 
 void MyVisitor::visit(ast::Break &node)
 {
+    if (!currentScope->isLoopScope)
+        output::errorUnexpectedBreak(node.line);
 }
 
 void MyVisitor::visit(ast::Continue &node)
 {
+    if (!currentScope->isLoopScope)
+        output::errorUnexpectedContinue(node.line);
 }
 
 void MyVisitor::visit(ast::Return &node)
 {
+    if (node.exp)
+    {
+        visit(*(node.exp));
+    }
 }
 
 void MyVisitor::visit(ast::If &node)
 {
+    visit(*(node.condition));
+    const ast::BuiltInType condType = lastType;
+
+    if (condType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
+
+    currentScope = make_shared<Scope>(currentScope);
+    printer.beginScope();
+    visit(*(node.then));
+    printer.endScope();
+    currentScope = currentScope->parentScope;
+    if (node.otherwise)
+    {
+        currentScope = make_shared<Scope>(currentScope);
+        printer.beginScope();
+        visit(*(node.otherwise));
+        printer.endScope();
+        currentScope = currentScope->parentScope;
+    }
 }
 
 void MyVisitor::visit(ast::While &node)
 {
+    visit(*(node.condition));
+    const ast::BuiltInType condType = lastType;
+
+    if (condType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
+
+    currentScope = make_shared<Scope>(currentScope);
+    currentScope->isLoopScope = true;
+    printer.beginScope();
+    visit(*(node.body));
+    printer.endScope();
+    currentScope = currentScope->parentScope;
 }
 
 void MyVisitor::visit(ast::VarDecl &node)

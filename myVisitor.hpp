@@ -48,6 +48,7 @@ public:
     std::map<std::string, VarInfo> varsMap;
     size_t offset;
     shared_ptr<Scope> parentScope;
+    bool isLoopScope = false;
     Scope(shared_ptr<Scope> parentScope) : offset(0), parentScope(parentScope) {}
 
     resultFound findType(const string &id)

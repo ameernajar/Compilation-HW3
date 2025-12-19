@@ -7,7 +7,8 @@
 #include "visitor.hpp"
 #include "nodes.hpp"
 
-namespace output {
+namespace output
+{
     /* Error handling functions */
 
     void errorLex(int lineno);
@@ -39,7 +40,8 @@ namespace output {
     /* ScopePrinter class
      * This class is used to print scopes in a human-readable format.
      */
-    class ScopePrinter {
+    class ScopePrinter
+    {
     private:
         std::stringstream globalsBuffer;
         std::stringstream buffer;
@@ -61,6 +63,8 @@ namespace output {
 
         friend std::ostream &operator<<(std::ostream &os, const ScopePrinter &printer);
     };
+
+    std::string typeToString(const ast::BuiltInType &type);
 }
 
-#endif //OUTPUT_HPP
+#endif // OUTPUT_HPP
