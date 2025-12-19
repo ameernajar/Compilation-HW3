@@ -4,14 +4,17 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <pair>
 
 using output::ScopePrinter;
+using std::make_shared;
+using std::pair;
+using std::shared_ptr;
 using std::string;
 using std::vector;
-
 extern std::shared_ptr<ast::Node> program;
 
-class MyVisitor : public Visitor
+class Scope
 {
     struct FuncInfo
     {
@@ -19,17 +22,63 @@ class MyVisitor : public Visitor
         vector<ast::BuiltInType> params;
     };
 
-    ScopePrinter scopePrinter;
-    std::map<std::string, FuncInfo> funcsMap;
+    struct VarInfo
+    {
+        ast::BuiltInType type;
+        int offset;
+    };
+
+    struct resultFound
+    {
+        enum IdType; // forward declaration
+        ast::BuiltInType type;
+        bool found;
+        IdType idType; // true for var, false for func
+    };
+
+public:
+    enum IdType
+    {
+        VAR,
+        FUNC
+    };
+
+    std::map<std::string, FuncInfo>
+        funcsMap;
+    std::map<std::string, VarInfo> varsMap;
+    size_t offset;
+    shared_ptr<Scope> parentScope;
+    Scope(shared_ptr<Scope> parentScope) : offset(0), parentScope(parentScope) {}
+
+    resultFound findType(const string &id)
+    {
+        if (varsMap.find(id) != varsMap.end())
+            return resultFound(varsMap[id].type, true, IdType::VAR);
+        if (funcsMap.find(id) != funcsMap.end())
+            return resultFound(funcsMap[id].ret, true, IdType::FUNC);
+        if (parentScope)
+            return parentScope->findType(id);
+        return resultFound(ast::BuiltInType::VOID, false, IdType::VAR);
+    }
+};
+
+class MyVisitor : public Visitor
+{
+    ScopePrinter printer;
+    shared_ptr<Scope> currentScope = make_shared<Scope>(nullptr);
+    ast::BuiltInType lastType;
+
+    void getFuncs();
+
+    void checkForMain();
 
 public:
     MyVisitor() = default;
 
-    void getFuncs();
-
     void analyze()
     {
         getFuncs();
+        checkForMain();
     }
 
     void visit(ast::Num &node) override;

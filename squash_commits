@@ -1,0 +1,9 @@
+$base_commit = <base commit>
+
+$commit_message = "<commit message>"
+
+git reset --soft 827cdb0589ce370965eadbf62f295f91883a4f4f
+
+git commit -m "modified getFuncs and added analyze method"
+
+git push --force-with-lease

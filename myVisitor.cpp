@@ -5,8 +5,10 @@
 
 void MyVisitor::getFuncs()
 {
-    output::ScopePrinter printer;
 
+    auto &funcsMap = currentScope->funcsMap;
+
+    // add built-in functions
     funcsMap["print"] = {ast::BuiltInType::VOID, {ast::BuiltInType::STRING}};
     funcsMap["printi"] = {ast::BuiltInType::VOID, {ast::BuiltInType::INT}};
 
@@ -30,33 +32,61 @@ void MyVisitor::getFuncs()
             }
         }
 
-        funcsMap[name] = FuncInfo{func->return_type->type, params};
+        funcsMap[name] = {func->return_type->type, params};
         printer.emitFunc(name, func->return_type->type, params);
+    }
+}
+
+void MyVisitor::checkForMain()
+{
+    const auto &it = currentScope->funcsMap.find("main");
+    if (it == currentScope->funcsMap.end() || it->second.ret != ast::BuiltInType::INT || !it->second.params.empty())
+    {
+        output::errorMainMissing();
     }
 }
 
 void MyVisitor::visit(ast::Num &node)
 {
+    lastType = ast::BuiltInType::INT;
+    return;
 }
 
 void MyVisitor::visit(ast::NumB &node)
 {
+    // maybe check if byte is negative
+    if (node.value > 255)
+    {
+        output::errorByteTooLarge(node.line, node.value);
+    }
+    lastType = ast::BuiltInType::BYTE;
+    return;
 }
 
 void MyVisitor::visit(ast::String &node)
 {
+    lastType = ast::BuiltInType::STRING;
 }
 
 void MyVisitor::visit(ast::Bool &node)
 {
+    lastType = ast::BuiltInType::BOOL;
 }
 
 void MyVisitor::visit(ast::ID &node)
 {
+    auto result = currentScope->findType(node.value);
+    if (!result.found)
+        output::errorUndef(node.line, node.value);
+
+    lastType = result.type;
 }
 
 void MyVisitor::visit(ast::BinOp &node)
 {
+    visit(*(node.left));
+
+    visit(*(node.right));
 }
 
 void MyVisitor::visit(ast::RelOp &node)
@@ -117,6 +147,8 @@ void MyVisitor::visit(ast::While &node)
 
 void MyVisitor::visit(ast::VarDecl &node)
 {
+    // add new id to varsMap before visiting ID
+    //  emitVar(const std::string &id, const ast::BuiltInType &type, int offset);
 }
 
 void MyVisitor::visit(ast::Assign &node)
