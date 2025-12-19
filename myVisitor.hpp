@@ -2,18 +2,35 @@
 #include "output.hpp"
 #include <memory>
 #include <map>
+#include <string>
+#include <vector>
 
 using output::ScopePrinter;
+using std::string;
+using std::vector;
+
+extern std::shared_ptr<ast::Node> program;
 
 class MyVisitor : public Visitor
 {
+    struct FuncInfo
+    {
+        ast::BuiltInType ret;
+        vector<ast::BuiltInType> params;
+    };
+
     ScopePrinter scopePrinter;
-    std::map<std::string, std::shared_ptr<ast::FuncDecl>> funcsMap;
+    std::map<std::string, FuncInfo> funcsMap;
 
 public:
     MyVisitor() = default;
 
-    void getFuncs(std::shared_ptr<ast::Funcs> program);
+    void getFuncs();
+
+    void analyze()
+    {
+        getFuncs();
+    }
 
     void visit(ast::Num &node) override;
 

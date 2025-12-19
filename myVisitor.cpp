@@ -3,31 +3,35 @@
 // Created by amirn on 12/19/2025.
 //
 
-void MyVisitor::getFuncs(std::shared_ptr<ast::Funcs> program)
+void MyVisitor::getFuncs()
 {
-    std::shared_ptr<ast::FuncDecl> printFunc = std::make_shared<ast::FuncDecl>(
-        std::make_shared<ast::ID>("print"),
-        std::make_shared<ast::Type>(ast::VOID),
-        std::make_shared<ast::Formals>(ast::FormalDecl(std::make_shared<ast::ID>("toPrint"),
-                                                       std::make_shared<ast::Type>(ast::STRING))),
-        std::make_shared<ast::Statements>());
-    std::shared_ptr<ast::FuncDecl> printiFunc = std::make_shared<ast::FuncDecl>(
-        std::make_shared<ast::ID>("printi"),
-        std::make_shared<ast::Type>(ast::VOID),
-        std::make_shared<ast::Formals>(ast::FormalDecl(std::make_shared<ast::ID>("toPrint"),
-                                                       std::make_shared<ast::Type>(ast::INT))),
-        std::make_shared<ast::Statements>());
-    funcsMap["print"] = printFunc;   // built-in function
-    funcsMap["printi"] = printiFunc; // built-in function
+    output::ScopePrinter printer;
 
-    for (const auto &func : program->funcs)
+    funcsMap["print"] = {ast::BuiltInType::VOID, {ast::BuiltInType::STRING}};
+    funcsMap["printi"] = {ast::BuiltInType::VOID, {ast::BuiltInType::INT}};
+
+    printer.emitFunc("print", ast::BuiltInType::VOID, {ast::BuiltInType::STRING});
+    printer.emitFunc("printi", ast::BuiltInType::VOID, {ast::BuiltInType::INT});
+
+    for (const auto &func : dynamic_cast<ast::Funcs *>(program.get())->funcs)
     {
+        const string &name = func->id->value;
         // given that a function must not be defined more than once (even with different parameters)
-        if (funcsMap.find(func->id->value) != funcsMap.end())
+        if (funcsMap.find(name) != funcsMap.end())
         {
-            output::errorDef(func->line, func->id->value);
+            output::errorDef(func->line, name);
         }
-        funcsMap[func->id->value] = func;
+        vector<ast::BuiltInType> params = {};
+        if (func->formals)
+        {
+            for (const auto &formal : func->formals->formals)
+            {
+                params.push_back(formal->type->type);
+            }
+        }
+
+        funcsMap[name] = FuncInfo{func->return_type->type, params};
+        printer.emitFunc(name, func->return_type->type, params);
     }
 }
 
