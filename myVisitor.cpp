@@ -3,6 +3,34 @@
 // Created by amirn on 12/19/2025.
 //
 
+void MyVisitor::getFuncs(std::shared_ptr<ast::Funcs> program)
+{
+    std::shared_ptr<ast::FuncDecl> printFunc = std::make_shared<ast::FuncDecl>(
+        std::make_shared<ast::ID>("print"),
+        std::make_shared<ast::Type>(ast::VOID),
+        std::make_shared<ast::Formals>(ast::FormalDecl(std::make_shared<ast::ID>("toPrint"),
+                                                       std::make_shared<ast::Type>(ast::STRING))),
+        std::make_shared<ast::Statements>());
+    std::shared_ptr<ast::FuncDecl> printiFunc = std::make_shared<ast::FuncDecl>(
+        std::make_shared<ast::ID>("printi"),
+        std::make_shared<ast::Type>(ast::VOID),
+        std::make_shared<ast::Formals>(ast::FormalDecl(std::make_shared<ast::ID>("toPrint"),
+                                                       std::make_shared<ast::Type>(ast::INT))),
+        std::make_shared<ast::Statements>());
+    funcsMap["print"] = printFunc;   // built-in function
+    funcsMap["printi"] = printiFunc; // built-in function
+
+    for (const auto &func : program->funcs)
+    {
+        // given that a function must not be defined more than once (even with different parameters)
+        if (funcsMap.find(func->id->value) != funcsMap.end())
+        {
+            output::errorDef(func->line, func->id->value);
+        }
+        funcsMap[func->id->value] = func;
+    }
+}
+
 void MyVisitor::visit(ast::Num &node)
 {
 }

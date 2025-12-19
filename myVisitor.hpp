@@ -1,9 +1,19 @@
 #include "visitor.hpp"
+#include "output.hpp"
+#include <memory>
+#include <map>
+
+using output::ScopePrinter;
 
 class MyVisitor : public Visitor
 {
+    ScopePrinter scopePrinter;
+    std::map<std::string, std::shared_ptr<ast::FuncDecl>> funcsMap;
+
 public:
     MyVisitor() = default;
+
+    void getFuncs(std::shared_ptr<ast::Funcs> program);
 
     void visit(ast::Num &node) override;
 
