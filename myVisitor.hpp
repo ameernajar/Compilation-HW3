@@ -4,7 +4,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <pair>
 
 using output::ScopePrinter;
 using std::make_shared;
@@ -14,8 +13,22 @@ using std::string;
 using std::vector;
 extern std::shared_ptr<ast::Node> program;
 
+enum IdType
+{
+    VAR,
+    FUNC
+};
+
 class Scope
 {
+    struct resultFound
+    {
+        ast::BuiltInType type;
+        bool found;
+        IdType idType;
+    };
+
+public:
     struct FuncInfo
     {
         ast::BuiltInType ret;
@@ -28,38 +41,24 @@ class Scope
         int offset;
     };
 
-    struct resultFound
-    {
-        enum IdType; // forward declaration
-        ast::BuiltInType type;
-        bool found;
-        IdType idType; // true for var, false for func
-    };
-
-public:
-    enum IdType
-    {
-        VAR,
-        FUNC
-    };
-
-    std::map<std::string, FuncInfo>
-        funcsMap;
+    // ------------------fields declaration------------------------
+    std::map<std::string, FuncInfo> funcsMap;
     std::map<std::string, VarInfo> varsMap;
     size_t offset;
     shared_ptr<Scope> parentScope;
     bool isLoopScope = false;
-    Scope(shared_ptr<Scope> parentScope) : offset(0), parentScope(parentScope) {}
+    Scope(shared_ptr<Scope> parentScope) : funcsMap(), varsMap(), offset(parentScope ? parentScope->offset : 0), parentScope(parentScope) {}
 
+    // ---------------------------methods---------------------------------
     resultFound findType(const string &id)
     {
         if (varsMap.find(id) != varsMap.end())
-            return resultFound(varsMap[id].type, true, IdType::VAR);
+            return resultFound{varsMap[id].type, true, IdType::VAR};
         if (funcsMap.find(id) != funcsMap.end())
-            return resultFound(funcsMap[id].ret, true, IdType::FUNC);
+            return resultFound{funcsMap[id].ret, true, IdType::FUNC};
         if (parentScope)
             return parentScope->findType(id);
-        return resultFound(ast::BuiltInType::VOID, false, IdType::VAR);
+        return resultFound{ast::BuiltInType::VOID, false, IdType::VAR};
     }
 };
 

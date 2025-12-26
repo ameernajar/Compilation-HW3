@@ -89,13 +89,13 @@ void MyVisitor::visit(ast::ID &node)
 
 void MyVisitor::visit(ast::BinOp &node)
 {
-    visit(*(node.left));
+    node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
 
     if (!isNumericType(leftType))
         output::errorMismatch(node.line);
 
-    visit(*(node.right));
+    node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
 
     if (!isNumericType(rightType))
@@ -109,13 +109,13 @@ void MyVisitor::visit(ast::BinOp &node)
 
 void MyVisitor::visit(ast::RelOp &node)
 {
-    visit(*(node.left));
+    node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
 
     if (!isNumericType(leftType))
         output::errorMismatch(node.line);
 
-    visit(*(node.right));
+    node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
 
     if (!isNumericType(rightType))
@@ -126,7 +126,7 @@ void MyVisitor::visit(ast::RelOp &node)
 
 void MyVisitor::visit(ast::Not &node)
 {
-    visit(*(node.exp));
+    node.exp->accept(*this);
     const ast::BuiltInType expType = lastType;
 
     if (expType != ast::BuiltInType::BOOL)
@@ -134,31 +134,51 @@ void MyVisitor::visit(ast::Not &node)
 
     lastType = ast::BuiltInType::BOOL;
 }
-
+/*
 void booleanOp(ast::Node &node)
 {
-    visit(*(node.left));
+    node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
 
     if (leftType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
 
-    visit(*(node.right));
+    node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
 
     if (rightType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
 }
-
+*/
 void MyVisitor::visit(ast::And &node)
 {
-    booleanOp(node);
+    node.left->accept(*this);
+    const ast::BuiltInType leftType = lastType;
+
+    if (leftType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
+
+    node.right->accept(*this);
+    const ast::BuiltInType rightType = lastType;
+
+    if (rightType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
     lastType = ast::BuiltInType::BOOL;
 }
 
 void MyVisitor::visit(ast::Or &node)
 {
-    booleanOp(node);
+    node.left->accept(*this);
+    const ast::BuiltInType leftType = lastType;
+
+    if (leftType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
+
+    node.right->accept(*this);
+    const ast::BuiltInType rightType = lastType;
+
+    if (rightType != ast::BuiltInType::BOOL)
+        output::errorMismatch(node.line);
     lastType = ast::BuiltInType::BOOL;
 }
 
@@ -169,7 +189,7 @@ void MyVisitor::visit(ast::Type &node)
 
 void MyVisitor::visit(ast::Cast &node)
 {
-    visit(*(node.exp));
+    node.exp->accept(*this);
     const ast::BuiltInType expType = lastType;
 
     if (expType == node.target_type->type)
@@ -194,7 +214,7 @@ void MyVisitor::visit(ast::ExpList &node)
 {
     for (const auto &exp : node.exps)
     {
-        visit(*exp);
+        exp->accept(*this);
     }
 }
 
@@ -205,17 +225,17 @@ void MyVisitor::visit(ast::Call &node)
     {
         output::errorUndefFunc(node.line, node.func_id->value);
     }
-    if (findResult.idType != Scope::IdType::FUNC)
+    if (findResult.idType != IdType::FUNC)
     {
         output::errorDefAsVar(node.line, node.func_id->value);
     }
-    const auto &funcInfo = findResult.funcInfo;
+    const auto &funcInfo = currentScope->funcsMap[node.func_id->value];
     vector<ast::BuiltInType> argTypes;
     if (node.args)
     {
         for (const auto &arg : node.args->exps)
         {
-            visit(*arg);
+            arg->accept(*this);
             argTypes.push_back(lastType);
         }
     }
@@ -241,7 +261,7 @@ void MyVisitor::visit(ast::Statements &node)
     // TODO: STATEMENT NODES DO NOT HAVE VISIT!
     for (const auto &statement : node.statements)
     {
-        visit(*statement);
+        statement->accept(*this);
     }
 }
 
@@ -261,13 +281,13 @@ void MyVisitor::visit(ast::Return &node)
 {
     if (node.exp)
     {
-        visit(*(node.exp));
+        node.exp->accept(*this);
     }
 }
 
 void MyVisitor::visit(ast::If &node)
 {
-    visit(*(node.condition));
+    node.condition->accept(*this);
     const ast::BuiltInType condType = lastType;
 
     if (condType != ast::BuiltInType::BOOL)
@@ -275,14 +295,14 @@ void MyVisitor::visit(ast::If &node)
 
     currentScope = make_shared<Scope>(currentScope);
     printer.beginScope();
-    visit(*(node.then));
+    node.then->accept(*this);
     printer.endScope();
     currentScope = currentScope->parentScope;
     if (node.otherwise)
     {
         currentScope = make_shared<Scope>(currentScope);
         printer.beginScope();
-        visit(*(node.otherwise));
+        node.otherwise->accept(*this);
         printer.endScope();
         currentScope = currentScope->parentScope;
     }
@@ -290,7 +310,7 @@ void MyVisitor::visit(ast::If &node)
 
 void MyVisitor::visit(ast::While &node)
 {
-    visit(*(node.condition));
+    node.condition->accept(*this);
     const ast::BuiltInType condType = lastType;
 
     if (condType != ast::BuiltInType::BOOL)
@@ -299,7 +319,7 @@ void MyVisitor::visit(ast::While &node)
     currentScope = make_shared<Scope>(currentScope);
     currentScope->isLoopScope = true;
     printer.beginScope();
-    visit(*(node.body));
+    node.body->accept(*this);
     printer.endScope();
     currentScope = currentScope->parentScope;
 }
@@ -308,24 +328,117 @@ void MyVisitor::visit(ast::VarDecl &node)
 {
     // add new id to varsMap before visiting ID
     //  emitVar(const std::string &id, const ast::BuiltInType &type, int offset);
+    if (currentScope->findType(node.id->value).found)
+        output::errorDef(node.line, node.id->value);
+
+    ast::BuiltInType initType = ast::BuiltInType::VOID;
+    if (node.init_exp)
+    {
+        node.init_exp->accept(*this);
+        initType = lastType;
+    }
+
+    node.type->accept(*this);
+    auto declType = lastType;
+
+    if (node.init_exp)
+    {
+        if (!isAssignable(declType, initType))
+        {
+            output::errorMismatch(node.line);
+        }
+    }
+
+    currentScope->varsMap[node.id->value] = Scope::VarInfo{declType, int(currentScope->offset)};
+    printer.emitVar(node.id->value, declType, int(currentScope->offset));
+    currentScope->offset += 1;
+}
+
+bool isAssignable(ast::BuiltInType dst, ast::BuiltInType src)
+{
+    if (dst == src)
+        return true;
+    if (dst == ast::BuiltInType::INT && src == ast::BuiltInType::BYTE)
+        return true;
+    return false;
 }
 
 void MyVisitor::visit(ast::Assign &node)
 {
+    const string &id = node.id->value;
+    auto result = currentScope->findType(id);
+    if (!result.found)
+    {
+        output::errorUndef(node.line, id);
+    }
+    if (result.idType == IdType::FUNC)
+    {
+        output::errorDefAsFunc(node.line, id);
+    }
+    auto dstType = result.type;
+    node.exp->accept(*this);
+    auto srcType = lastType;
+    if (!isAssignable(dstType, srcType))
+    {
+        output::errorMismatch(node.line);
+    }
 }
 
 void MyVisitor::visit(ast::Formal &node)
 {
+    auto paramType = node.type->type;
+    const string &paramid = node.id->value;
+
+    // TODO: get param info add to scopes and emit
+    currentScope->varsMap[paramid] = Scope::VarInfo{paramType, int(currentScope->offset) * -1};
+    printer.emitVar(paramid, paramType, int(currentScope->offset) * -1);
+    currentScope->offset++;
 }
 
 void MyVisitor::visit(ast::Formals &node)
 {
+    currentScope->offset = 1; // first param offset
+    for (const auto &formal : node.formals)
+    {
+        if (currentScope->findType(formal->id->value).found)
+        {
+            output::errorDef(formal->line, formal->id->value);
+        }
+        formal->accept(*this);
+    }
+
+    // reset offset for local variables
+    // TODO: not sure about this
+    currentScope->offset = 0;
 }
 
 void MyVisitor::visit(ast::FuncDecl &node)
 {
+    // a function is already added in getFuncs
+    // we made sure in getFuncs that no function is defined more than once
+    const string &func_name = node.id->value;
+    auto func = currentScope->funcsMap[func_name];
+    auto retType = func.ret;
+
+    printer.beginScope();
+    currentScope = make_shared<Scope>(currentScope);
+
+    // visit formals
+    if (node.formals)
+    {
+        node.formals->accept(*this);
+    }
+
+    node.body->accept(*this);
+
+    printer.endScope();
+    currentScope = currentScope->parentScope;
 }
 
 void MyVisitor::visit(ast::Funcs &node)
 {
+    for (const auto &func : node.funcs)
+    {
+        func->accept(*this);
+    }
 }
