@@ -1,7 +1,8 @@
 #ifndef VISITOR_HPP
 #define VISITOR_HPP
 
-namespace ast {
+namespace ast
+{
     class Num;
     class NumB;
     class String;
@@ -30,7 +31,8 @@ namespace ast {
     class Funcs;
 }
 
-class Visitor {
+class Visitor
+{
 public:
     virtual void visit(ast::Num &node) = 0;
 
@@ -85,4 +87,4 @@ public:
     virtual void visit(ast::Funcs &node) = 0;
 };
 
-#endif //VISITOR_HPP
+#endif // VISITOR_HPP

@@ -128,7 +128,7 @@ namespace ast
         Funcs::Funcs(std::shared_ptr<FuncDecl> func, std::shared_ptr<Funcs> other)
         {
                 funcs = other->funcs;
-                funcs.push_back(func);
+                funcs.insert(funcs.begin(), func);
         }
         Funcs::Funcs(std::shared_ptr<FuncDecl> func) : Node(), funcs({std::move(func)}) {}
 

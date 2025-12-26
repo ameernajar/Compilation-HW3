@@ -4,8 +4,10 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <iostream>
 
 using output::ScopePrinter;
+using std::cout;
 using std::make_shared;
 using std::pair;
 using std::shared_ptr;
@@ -21,12 +23,6 @@ enum IdType
 
 class Scope
 {
-    struct resultFound
-    {
-        ast::BuiltInType type;
-        bool found;
-        IdType idType;
-    };
 
 public:
     struct FuncInfo
@@ -40,6 +36,18 @@ public:
         ast::BuiltInType type;
         int offset;
     };
+    struct Info
+    {
+        FuncInfo *func;
+        VarInfo *var;
+    };
+    struct resultFound
+    {
+        ast::BuiltInType type;
+        bool found;
+        IdType idType;
+        Info info;
+    };
 
     // ------------------fields declaration------------------------
     std::map<std::string, FuncInfo> funcsMap;
@@ -50,15 +58,15 @@ public:
     Scope(shared_ptr<Scope> parentScope) : funcsMap(), varsMap(), offset(parentScope ? parentScope->offset : 0), parentScope(parentScope) {}
 
     // ---------------------------methods---------------------------------
-    resultFound findType(const string &id)
+    resultFound find(const string &id)
     {
         if (varsMap.find(id) != varsMap.end())
-            return resultFound{varsMap[id].type, true, IdType::VAR};
+            return resultFound{varsMap[id].type, true, IdType::VAR, Info{nullptr, &varsMap[id]}};
         if (funcsMap.find(id) != funcsMap.end())
-            return resultFound{funcsMap[id].ret, true, IdType::FUNC};
+            return resultFound{funcsMap[id].ret, true, IdType::FUNC, Info{&funcsMap[id], nullptr}};
         if (parentScope)
-            return parentScope->findType(id);
-        return resultFound{ast::BuiltInType::VOID, false, IdType::VAR};
+            return parentScope->find(id);
+        return resultFound{ast::BuiltInType::VOID, false, IdType::VAR, Info{nullptr, nullptr}};
     }
 };
 
@@ -80,6 +88,7 @@ public:
         getFuncs();
         checkForMain();
     }
+    void visitStatement(ast::Statement &node);
 
     void visit(ast::Num &node) override;
 

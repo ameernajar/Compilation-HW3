@@ -44,8 +44,9 @@ void MyVisitor::getFuncs()
 
 void MyVisitor::checkForMain()
 {
-    const auto &it = currentScope->funcsMap.find("main");
-    if (it == currentScope->funcsMap.end() || it->second.ret != ast::BuiltInType::INT || !it->second.params.empty())
+    const auto &result = currentScope->find("main");
+    if (!result.found || result.idType != IdType::FUNC ||
+        result.type != ast::BuiltInType::VOID || !result.info.func->params.empty())
     {
         output::errorMainMissing();
     }
@@ -80,7 +81,7 @@ void MyVisitor::visit(ast::Bool &node)
 
 void MyVisitor::visit(ast::ID &node)
 {
-    auto result = currentScope->findType(node.value);
+    auto result = currentScope->find(node.value);
     if (!result.found)
         output::errorUndef(node.line, node.value);
 
@@ -220,7 +221,7 @@ void MyVisitor::visit(ast::ExpList &node)
 
 void MyVisitor::visit(ast::Call &node)
 {
-    const auto findResult = currentScope->findType(node.func_id->value);
+    const auto findResult = currentScope->find(node.func_id->value);
     if (!findResult.found)
     {
         output::errorUndefFunc(node.line, node.func_id->value);
@@ -229,7 +230,7 @@ void MyVisitor::visit(ast::Call &node)
     {
         output::errorDefAsVar(node.line, node.func_id->value);
     }
-    const auto &funcInfo = currentScope->funcsMap[node.func_id->value];
+    const auto &funcInfo = *findResult.info.func;
     vector<ast::BuiltInType> argTypes;
     if (node.args)
     {
@@ -285,6 +286,28 @@ void MyVisitor::visit(ast::Return &node)
     }
 }
 
+void MyVisitor::visitStatement(ast::Statement &node)
+{
+    try
+    {
+        ast::Statements &stmtNode = dynamic_cast<ast::Statements &>(node);
+        if (stmtNode.statements.size() > 1)
+        {
+            currentScope = make_shared<Scope>(currentScope);
+            printer.beginScope();
+
+            stmtNode.accept(*this);
+
+            printer.endScope();
+            currentScope = currentScope->parentScope;
+        }
+    }
+    catch (const std::bad_cast &)
+    {
+        node.accept(*this);
+    }
+}
+
 void MyVisitor::visit(ast::If &node)
 {
     node.condition->accept(*this);
@@ -295,14 +318,14 @@ void MyVisitor::visit(ast::If &node)
 
     currentScope = make_shared<Scope>(currentScope);
     printer.beginScope();
-    node.then->accept(*this);
+    visitStatement(*node.then);
     printer.endScope();
     currentScope = currentScope->parentScope;
     if (node.otherwise)
     {
         currentScope = make_shared<Scope>(currentScope);
         printer.beginScope();
-        node.otherwise->accept(*this);
+        visitStatement(*node.otherwise);
         printer.endScope();
         currentScope = currentScope->parentScope;
     }
@@ -319,16 +342,25 @@ void MyVisitor::visit(ast::While &node)
     currentScope = make_shared<Scope>(currentScope);
     currentScope->isLoopScope = true;
     printer.beginScope();
-    node.body->accept(*this);
+    visitStatement(*node.body);
     printer.endScope();
     currentScope = currentScope->parentScope;
+}
+
+bool isAssignable(ast::BuiltInType dst, ast::BuiltInType src)
+{
+    if (dst == src)
+        return true;
+    if (dst == ast::BuiltInType::INT && src == ast::BuiltInType::BYTE)
+        return true;
+    return false;
 }
 
 void MyVisitor::visit(ast::VarDecl &node)
 {
     // add new id to varsMap before visiting ID
     //  emitVar(const std::string &id, const ast::BuiltInType &type, int offset);
-    if (currentScope->findType(node.id->value).found)
+    if (currentScope->find(node.id->value).found)
         output::errorDef(node.line, node.id->value);
 
     ast::BuiltInType initType = ast::BuiltInType::VOID;
@@ -354,19 +386,10 @@ void MyVisitor::visit(ast::VarDecl &node)
     currentScope->offset += 1;
 }
 
-bool isAssignable(ast::BuiltInType dst, ast::BuiltInType src)
-{
-    if (dst == src)
-        return true;
-    if (dst == ast::BuiltInType::INT && src == ast::BuiltInType::BYTE)
-        return true;
-    return false;
-}
-
 void MyVisitor::visit(ast::Assign &node)
 {
     const string &id = node.id->value;
-    auto result = currentScope->findType(id);
+    auto result = currentScope->find(id);
     if (!result.found)
     {
         output::errorUndef(node.line, id);
@@ -400,7 +423,7 @@ void MyVisitor::visit(ast::Formals &node)
     currentScope->offset = 1; // first param offset
     for (const auto &formal : node.formals)
     {
-        if (currentScope->findType(formal->id->value).found)
+        if (currentScope->find(formal->id->value).found)
         {
             output::errorDef(formal->line, formal->id->value);
         }
@@ -408,7 +431,6 @@ void MyVisitor::visit(ast::Formals &node)
     }
 
     // reset offset for local variables
-    // TODO: not sure about this
     currentScope->offset = 0;
 }
 
@@ -437,8 +459,10 @@ void MyVisitor::visit(ast::FuncDecl &node)
 
 void MyVisitor::visit(ast::Funcs &node)
 {
+    analyze();
     for (const auto &func : node.funcs)
     {
         func->accept(*this);
     }
+    std::cout << printer;
 }
