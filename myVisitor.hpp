@@ -55,7 +55,10 @@ public:
     size_t offset;
     shared_ptr<Scope> parentScope;
     bool isLoopScope = false;
-    Scope(shared_ptr<Scope> parentScope) : funcsMap(), varsMap(), offset(parentScope ? parentScope->offset : 0), parentScope(parentScope) {}
+    Scope(shared_ptr<Scope> parentScope) : funcsMap(), varsMap(),
+                                           offset(parentScope ? parentScope->offset : 0),
+                                           parentScope(parentScope),
+                                           isLoopScope(parentScope ? parentScope->isLoopScope : false) {}
 
     // ---------------------------methods---------------------------------
     resultFound find(const string &id)

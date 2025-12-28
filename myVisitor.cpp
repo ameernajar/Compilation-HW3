@@ -26,7 +26,7 @@ void MyVisitor::getFuncs()
         // given that a function must not be defined more than once (even with different parameters)
         if (funcsMap.find(name) != funcsMap.end())
         {
-            output::errorDef(func->line, name);
+            output::errorDef(func->id->line, name);
         }
         vector<ast::BuiltInType> params = {};
         if (func->formals)
@@ -88,16 +88,32 @@ void MyVisitor::visit(ast::ID &node)
     lastType = result.type;
 }
 
+void verifyFuncNotUsedAsVar(ast::Node &node, shared_ptr<Scope> &currentScope)
+{
+    if (auto func = dynamic_cast<ast::ID *>(&node))
+    {
+        const auto findResult = currentScope->find(func->value);
+        if (findResult.found && findResult.idType == IdType::FUNC)
+        {
+            output::errorDefAsFunc(node.line, func->value);
+        }
+    }
+}
+
 void MyVisitor::visit(ast::BinOp &node)
 {
     node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
+
+    verifyFuncNotUsedAsVar(*node.left, currentScope);
 
     if (!isNumericType(leftType))
         output::errorMismatch(node.line);
 
     node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
+
+    verifyFuncNotUsedAsVar(*node.right, currentScope);
 
     if (!isNumericType(rightType))
         output::errorMismatch(node.line);
@@ -113,11 +129,15 @@ void MyVisitor::visit(ast::RelOp &node)
     node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
 
+    verifyFuncNotUsedAsVar(*node.left, currentScope);
+
     if (!isNumericType(leftType))
         output::errorMismatch(node.line);
 
     node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
+
+    verifyFuncNotUsedAsVar(*node.right, currentScope);
 
     if (!isNumericType(rightType))
         output::errorMismatch(node.line);
@@ -129,6 +149,8 @@ void MyVisitor::visit(ast::Not &node)
 {
     node.exp->accept(*this);
     const ast::BuiltInType expType = lastType;
+
+    // TODO: not sure if we need to check func as var here
 
     if (expType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
@@ -156,11 +178,15 @@ void MyVisitor::visit(ast::And &node)
     node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
 
+    verifyFuncNotUsedAsVar(*node.left, currentScope);
+
     if (leftType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
 
     node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
+
+    verifyFuncNotUsedAsVar(*node.right, currentScope);
 
     if (rightType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
@@ -172,11 +198,15 @@ void MyVisitor::visit(ast::Or &node)
     node.left->accept(*this);
     const ast::BuiltInType leftType = lastType;
 
+    verifyFuncNotUsedAsVar(*node.left, currentScope);
+
     if (leftType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
 
     node.right->accept(*this);
     const ast::BuiltInType rightType = lastType;
+
+    verifyFuncNotUsedAsVar(*node.right, currentScope);
 
     if (rightType != ast::BuiltInType::BOOL)
         output::errorMismatch(node.line);
@@ -188,27 +218,37 @@ void MyVisitor::visit(ast::Type &node)
     lastType = node.type;
 }
 
+bool checkLegalCast(ast::BuiltInType from, ast::BuiltInType to, ast::BuiltInType &lastType)
+{
+    // casting from or to anything other than int or byte is illegal
+    /*
+    legal casts:
+        int->int
+        int->byte
+        byte->int
+        byte->byte
+    */
+    if (from != ast::BuiltInType::INT && from != ast::BuiltInType::BYTE)
+        return false;
+
+    if (to == ast::BuiltInType::INT || to == ast::BuiltInType::BYTE)
+    {
+        lastType = to;
+        return true;
+    }
+
+    return false;
+}
+
 void MyVisitor::visit(ast::Cast &node)
 {
     node.exp->accept(*this);
     const ast::BuiltInType expType = lastType;
 
-    if (expType == node.target_type->type)
-        return;
+    verifyFuncNotUsedAsVar(*node.exp, currentScope);
 
-    if (expType == ast::BuiltInType::INT && node.target_type->type == ast::BuiltInType::BYTE)
-    {
-        lastType = ast::BuiltInType::BYTE;
-        return;
-    }
-
-    if (expType == ast::BuiltInType::BYTE && node.target_type->type == ast::BuiltInType::INT)
-    {
-        lastType = ast::BuiltInType::INT;
-        return;
-    }
-
-    output::errorMismatch(node.line);
+    if (!checkLegalCast(expType, node.target_type->type, lastType))
+        output::errorMismatch(node.line);
 }
 
 void MyVisitor::visit(ast::ExpList &node)
@@ -246,23 +286,43 @@ void MyVisitor::visit(ast::Call &node)
     for (const auto &type : funcInfo.params)
         paramTypes.push_back(output::typeToString(type));
 
+    // cout << "arg types: [";
+    // for (size_t i = 0; i < argTypes.size(); ++i)
+    // {
+    //     cout << argTypes[i] << " ";
+    // }
+    // cout << "]\n";
+
+    // cout << "param types: [";
+    // for (size_t i = 0; i < funcInfo.params.size(); ++i)
+    // {
+    //     cout << funcInfo.params[i] << " ";
+    // }
+    // cout << "]\n";
+
     // check parameter count and types
     if (argTypes.size() != funcInfo.params.size())
         output::errorPrototypeMismatch(node.line, node.func_id->value, paramTypes);
+
     for (size_t i = 0; i < argTypes.size(); ++i)
     {
+        // checking if we can also cast, not only explicit type match.
+        // Also, lastType updating here in checkLegalCast is overwritten later so no need for it.
         if (argTypes[i] != funcInfo.params[i])
-            output::errorPrototypeMismatch(node.line, node.func_id->value, paramTypes);
+        {
+            if (!checkLegalCast(argTypes[i], funcInfo.params[i], lastType))
+                output::errorPrototypeMismatch(node.line, node.func_id->value, paramTypes);
+        }
     }
+    lastType = funcInfo.ret;
 }
 
 void MyVisitor::visit(ast::Statements &node)
 {
     // TODO: check scopes
-    // TODO: STATEMENT NODES DO NOT HAVE VISIT!
     for (const auto &statement : node.statements)
     {
-        statement->accept(*this);
+        visitStatement(*statement);
     }
 }
 
@@ -291,16 +351,13 @@ void MyVisitor::visitStatement(ast::Statement &node)
     try
     {
         ast::Statements &stmtNode = dynamic_cast<ast::Statements &>(node);
-        if (stmtNode.statements.size() > 1)
-        {
-            currentScope = make_shared<Scope>(currentScope);
-            printer.beginScope();
+        currentScope = make_shared<Scope>(currentScope);
+        printer.beginScope();
 
-            stmtNode.accept(*this);
+        stmtNode.accept(*this);
 
-            printer.endScope();
-            currentScope = currentScope->parentScope;
-        }
+        printer.endScope();
+        currentScope = currentScope->parentScope;
     }
     catch (const std::bad_cast &)
     {
@@ -358,8 +415,6 @@ bool isAssignable(ast::BuiltInType dst, ast::BuiltInType src)
 
 void MyVisitor::visit(ast::VarDecl &node)
 {
-    // add new id to varsMap before visiting ID
-    //  emitVar(const std::string &id, const ast::BuiltInType &type, int offset);
     if (currentScope->find(node.id->value).found)
         output::errorDef(node.line, node.id->value);
 
