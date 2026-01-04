@@ -157,22 +157,7 @@ void MyVisitor::visit(ast::Not &node)
 
     lastType = ast::BuiltInType::BOOL;
 }
-/*
-void booleanOp(ast::Node &node)
-{
-    node.left->accept(*this);
-    const ast::BuiltInType leftType = lastType;
 
-    if (leftType != ast::BuiltInType::BOOL)
-        output::errorMismatch(node.line);
-
-    node.right->accept(*this);
-    const ast::BuiltInType rightType = lastType;
-
-    if (rightType != ast::BuiltInType::BOOL)
-        output::errorMismatch(node.line);
-}
-*/
 void MyVisitor::visit(ast::And &node)
 {
     node.left->accept(*this);
@@ -259,6 +244,17 @@ void MyVisitor::visit(ast::ExpList &node)
     }
 }
 
+string toCaps(const string &str)
+{
+    string res = str;
+    for (int i = 0; i < str.length(); i++)
+    {
+        if (islower(str[i]))
+            res[i] = toupper(res[i]);
+    }
+    return res;
+}
+
 void MyVisitor::visit(ast::Call &node)
 {
     const auto findResult = currentScope->find(node.func_id->value);
@@ -284,21 +280,7 @@ void MyVisitor::visit(ast::Call &node)
     // cast param types to string for error message
     vector<string> paramTypes;
     for (const auto &type : funcInfo.params)
-        paramTypes.push_back(output::typeToString(type));
-
-    // cout << "arg types: [";
-    // for (size_t i = 0; i < argTypes.size(); ++i)
-    // {
-    //     cout << argTypes[i] << " ";
-    // }
-    // cout << "]\n";
-
-    // cout << "param types: [";
-    // for (size_t i = 0; i < funcInfo.params.size(); ++i)
-    // {
-    //     cout << funcInfo.params[i] << " ";
-    // }
-    // cout << "]\n";
+        paramTypes.push_back(toCaps(output::typeToString(type)));
 
     // check parameter count and types
     if (argTypes.size() != funcInfo.params.size())
